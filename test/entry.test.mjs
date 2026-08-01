@@ -8,8 +8,8 @@ const t = (n, ok, x = "") => { (ok ? pass++ : fail++); console.log(`${ok ? "PASS
 
 t("entry id matches manifest", entry.id === manifest.id, `${entry.id} / ${manifest.id}`);
 t("package declares the entry", pkg.openclaw?.extensions?.[0] === "./index.js");
-t("package name is the ClawHub scope", pkg.name === "@khalid-extend/extend-panel", pkg.name);
-t("manifest scope matches owner khalid-extend", pkg.name.startsWith("@khalid-extend/"));
+t("package name is the ClawHub scope", pkg.name === "@khaled-harthi/extend-panel", pkg.name);
+t("manifest scope matches owner khaled-harthi", pkg.name.startsWith("@khaled-harthi/"));
 
 /* compat.pluginApi gates install (src/plugins/install-shared.ts); an invalid
    shape aborts discovery entirely, so assert the exact contract. */

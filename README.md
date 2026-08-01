@@ -10,7 +10,7 @@ Built for people who run an agent but do not want to edit config by hand.
 ## Install
 
 ```bash
-openclaw plugins install clawhub:@khalid-extend/extend-panel
+openclaw plugins install clawhub:@khaled-harthi/extend-panel
 ```
 
 Installing plugin code needs a gateway restart. After that, message your agent:
