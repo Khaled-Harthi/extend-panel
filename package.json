@@ -1,0 +1,47 @@
+{
+  "name": "@khalid-extend/extend-panel",
+  "version": "0.1.0",
+  "description": "Arabic-first mobile control panel for OpenClaw, opened from a private chat link.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "openclaw",
+    "openclaw-plugin",
+    "arabic",
+    "control-panel",
+    "whatsapp"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Khaled-Harthi/extend-panel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Khaled-Harthi/extend-panel/issues"
+  },
+  "homepage": "https://github.com/Khaled-Harthi/extend-panel#readme",
+  "files": [
+    "index.js",
+    "src",
+    "public",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.7.1"
+    },
+    "build": {
+      "openclawVersion": "2026.7.2"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node test/entry.test.mjs && node test/panel.test.mjs"
+  }
+}

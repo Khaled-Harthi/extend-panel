@@ -1,0 +1,30 @@
+{
+  "id": "extend-panel",
+  "name": "Extend Panel",
+  "description": "Arabic-first mobile control panel for OpenClaw, opened from a private chat link.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "panelUrl": {
+        "type": "string",
+        "description": "Public https address the panel is reachable at. Only needed when the gateway sits behind a reverse proxy or tunnel."
+      },
+      "linkTtlMinutes": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 60,
+        "description": "How long a chat link stays valid. Defaults to 15 minutes."
+      },
+      "sessionDays": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 90,
+        "description": "How long a browser stays signed in after opening a link. Defaults to 30 days."
+      }
+    }
+  },
+  "commandAliases": [{ "name": "extend", "kind": "runtime-slash" }],
+  "activation": { "onStartup": true }
+}
