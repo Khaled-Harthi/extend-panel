@@ -14,6 +14,7 @@ set -eu
 
 VERSION="${VERSION:-v0.1.2}"
 REPO="github.com/Khaled-Harthi/extend-panel"
+RAW="https://raw.githubusercontent.com/Khaled-Harthi/extend-panel/main/install.sh"
 SPEC="git:${REPO}@${VERSION}"
 IMAGE_MATCH="hvps-openclaw"
 
@@ -28,6 +29,20 @@ CT=""
 if command -v docker >/dev/null 2>&1; then
   CT=$(docker ps --format '{{.Names}} {{.Image}}' 2>/dev/null \
        | awk -v m="$IMAGE_MATCH" 'index($2, m) {print $1; exit}')
+fi
+
+# Inside the OpenClaw container there is no docker socket and no way to learn the
+# public hostname: Traefik routes `<stack>.$TRAEFIK_HOST`, and the stack name
+# lives only in the compose project on the host. Installing here still works, but
+# the chat link would point at localhost, so stop and send them to the host.
+if [ -z "$CT" ] && [ -n "${TRAEFIK_HOST:-}" ] && [ -z "${PANEL_URL:-}" ]; then
+  die "This looks like the OpenClaw container, which cannot see its own public address.
+
+  Run the same line on the VPS itself (ssh into the server, not this shell):
+    curl -fsSL $RAW | sh
+
+  Or stay here and pass the address by hand:
+    curl -fsSL $RAW | PANEL_URL=https://your-address sh"
 fi
 
 if [ -n "$CT" ]; then
@@ -63,7 +78,7 @@ if [ -n "$HOST" ]; then
     || warn "Could not save the address; set it later with PANEL_URL=..."
 else
   warn "Could not detect a public address. Chat links will point at localhost."
-  warn "Re-run with: curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | PANEL_URL=https://your-address sh"
+  warn "Re-run with: curl -fsSL $RAW | PANEL_URL=https://your-address sh"
 fi
 
 # ---- restart and wait ---------------------------------------------------
@@ -84,7 +99,14 @@ else
   openclaw gateway restart >/dev/null 2>&1 || warn "Restart the gateway yourself to finish."
 fi
 
-printf '\n\033[32m✓ Extend Panel is installed.\033[0m\n\n'
-[ -n "$HOST" ] && printf '  %s/hooks/extend-panel/\n\n' "$HOST"
-printf '  أرسل \033[1m/extend\033[0m في المحادثة للحصول على رابطك الخاص.\n'
-printf '  Send \033[1m/extend\033[0m to your agent to get your private link.\n\n'
+if [ -n "$HOST" ]; then
+  printf '\n\033[32m✓ Extend Panel is installed.\033[0m\n\n'
+  printf '  %s/hooks/extend-panel/\n\n' "$HOST"
+  printf '  أرسل \033[1m/extend\033[0m في المحادثة للحصول على رابطك الخاص.\n'
+  printf '  Send \033[1m/extend\033[0m to your agent to get your private link.\n\n'
+else
+  # Installed, but /extend would hand out a localhost link, so do not call it done.
+  printf '\n\033[33m!\033[0m Extend Panel is installed, but it has no public address yet,\n'
+  printf '  so chat links would point at localhost. Set one with:\n\n'
+  printf '    curl -fsSL %s | PANEL_URL=https://your-address sh\n\n' "$RAW"
+fi
