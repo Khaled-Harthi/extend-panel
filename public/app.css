@@ -169,13 +169,20 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;back
   --i-list:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.9%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M8%206h12M8%2012h12M8%2018h12M4%206h.01M4%2012h.01M4%2018h.01%22%2F%3E%3C%2Fsvg%3E");
   --i-quote:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.9%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M9%207H5v5h4c0%202.5-1%203.5-3%204M19%207h-4v5h4c0%202.5-1%203.5-3%204%22%2F%3E%3C%2Fsvg%3E");
   --i-link:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.9%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M10%2013a4%204%200%200%200%205.7.4l2.6-2.6a4%204%200%200%200-5.7-5.7L11.4%206.5M14%2011a4%204%200%200%200-5.7-.4l-2.6%202.6a4%204%200%200%200%205.7%205.7l1.1-1.1%22%2F%3E%3C%2Fsvg%3E");
-  --i-eye:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.9%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M2%2012s3.6-6.5%2010-6.5S22%2012%2022%2012s-3.6%206.5-10%206.5S2%2012%202%2012Z%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%222.6%22%2F%3E%3C%2Fsvg%3E");
 }
 
 /* ---------- markdown editor (EasyMDE) ----------
    Theme the vendored editor to match the panel. Icons are inline SVG masks so
    the page never reaches for an icon font. */
-.editor{margin-top:18px}
+/* Edit / preview tabs. The editor keeps its own top border radius square
+   underneath so the tab strip reads as attached to it. */
+.mdtabs{display:flex;gap:4px;margin:18px 0 0;padding:4px;background:var(--tile);
+  border:1px solid var(--border);border-radius:var(--r-grp) var(--r-grp) 0 0;border-bottom:0}
+.mdtab{flex:1;appearance:none;border:0;background:transparent;color:var(--muted);
+  font:inherit;font-size:15px;padding:9px 12px;border-radius:calc(var(--r-grp) - 4px);cursor:pointer}
+.mdtab.on{background:var(--surface);color:var(--display);font-weight:600}
+.editor{margin-top:0}
+.editor .editor-toolbar{border-radius:0}
 .EasyMDEContainer .CodeMirror{background:var(--surface);border:1px solid var(--border);
   border-radius:0 0 var(--r-grp) var(--r-grp);color:var(--display);
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;line-height:1.8;
@@ -202,7 +209,6 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;back
 .mdb-list{-webkit-mask-image:var(--i-list);mask-image:var(--i-list)}
 .mdb-quote{-webkit-mask-image:var(--i-quote);mask-image:var(--i-quote)}
 .mdb-link{-webkit-mask-image:var(--i-link);mask-image:var(--i-link)}
-.mdb-eye{-webkit-mask-image:var(--i-eye);mask-image:var(--i-eye)}
 
 /* inline styling as you type — this is what makes it feel like a real editor */
 .EasyMDEContainer .cm-header{color:var(--display);font-weight:800;line-height:1.4}
@@ -217,7 +223,14 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;back
 .EasyMDEContainer .CodeMirror-selected{background:var(--tile)}
 
 /* rendered preview */
-.md-preview{background:var(--surface);padding:18px;font-size:16px;line-height:1.85}
+/* Match the editor pane so switching tabs does not resize the page. */
+.EasyMDEContainer .editor-preview{background:var(--surface);border:1px solid var(--border);
+  border-radius:0 0 var(--r-grp) var(--r-grp);min-height:46dvh;padding:0}
+.EasyMDEContainer.previewing .editor-toolbar{display:none}
+/* Prose, not source: the editor pane is monospace, the preview must not be. */
+.md-preview{background:var(--surface);padding:18px;font-size:16px;line-height:1.85;
+  font-family:"Noto Naskh Arabic",system-ui,-apple-system,"Segoe UI",sans-serif}
+.md-preview code,.md-preview pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .md-preview h1,.md-preview h2,.md-preview h3{margin:1.1em 0 .45em;font-weight:700;line-height:1.35}
 .md-preview h1{font-size:1.55em}.md-preview h2{font-size:1.3em}.md-preview h3{font-size:1.12em}
 .md-preview p,.md-preview ul,.md-preview ol{margin:0 0 1em}

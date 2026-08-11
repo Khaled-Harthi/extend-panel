@@ -155,9 +155,55 @@ const MDE_TOOLBAR = [
   { name: "list", action: EasyMDE.toggleUnorderedList, className: "mdb-list", title: "قائمة" },
   { name: "quote", action: EasyMDE.toggleBlockquote, className: "mdb-quote", title: "اقتباس" },
   { name: "link", action: EasyMDE.drawLink, className: "mdb-link", title: "رابط" },
-  "|",
-  { name: "preview", action: EasyMDE.togglePreview, className: "mdb-eye no-disable", title: "معاينة" },
 ];
+
+/* Preview is a tab, not a toolbar toggle, so there is exactly one control for
+   it and nothing can disagree about which mode is showing. EasyMDE only offers
+   a toggle, so read its state and act only when the two differ. */
+function setEditorTab(mode) {
+  if (!MDE) return;
+  const wantPreview = mode === "preview";
+  if (MDE.isPreviewActive() !== wantPreview) MDE.togglePreview();
+  // Nothing in preview is editable, so the formatting toolbar would only invite
+  // taps that do nothing visible.
+  document.querySelector(".EasyMDEContainer")?.classList.toggle("previewing", wantPreview);
+  document.querySelectorAll(".mdtab").forEach((b) => {
+    const on = (b.dataset.tab === "preview") === wantPreview;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", String(on));
+  });
+}
+const editorTabs = () => `<div class="mdtabs" role="tablist">
+  <button class="mdtab on" role="tab" aria-selected="true" data-tab="edit" data-on="tabEdit">تحرير</button>
+  <button class="mdtab" role="tab" aria-selected="false" data-tab="preview" data-on="tabPreview">معاينة</button>
+</div>`;
+/* These files are written by the agent, and chat content reaches them — a group
+   message quoted into MEMORY.md becomes preview HTML. Markdown allows raw HTML,
+   so render through an allowlist: unknown elements are unwrapped to their text,
+   script/style are dropped whole, and only http(s)/mailto/anchor URLs survive.
+   Without this, anyone who can message the agent can run script in the panel. */
+const PREVIEW_TAGS = new Set(["A","P","BR","HR","EM","STRONG","B","I","CODE","PRE","BLOCKQUOTE",
+  "UL","OL","LI","H1","H2","H3","H4","H5","H6","IMG","TABLE","THEAD","TBODY","TR","TH","TD","DEL"]);
+const SAFE_URL = /^(?:https?:\/\/|mailto:|#|\/)/i;
+function sanitizePreview(html) {
+  const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+  doc.body.querySelectorAll("script,style,iframe,object,embed,form").forEach(el => el.remove());
+  for (const el of [...doc.body.querySelectorAll("*")]) {
+    if (!PREVIEW_TAGS.has(el.tagName)) { el.replaceWith(...el.childNodes); continue; }
+    for (const { name } of [...el.attributes]) {
+      const keep = (el.tagName === "A" && name === "href")
+        || (el.tagName === "IMG" && (name === "src" || name === "alt"));
+      if (!keep) el.removeAttribute(name);
+    }
+    for (const attr of ["href", "src"]) {
+      const v = el.getAttribute(attr);
+      if (v !== null && !SAFE_URL.test(v.trim())) el.removeAttribute(attr);
+    }
+    if (el.tagName === "A") { el.setAttribute("rel", "noopener noreferrer"); el.setAttribute("target", "_blank"); }
+  }
+  return doc.body.innerHTML;
+}
+
 function mountEditor(el, content) {
   destroyEditor();
   MDE = new EasyMDE({
@@ -172,6 +218,7 @@ function mountEditor(el, content) {
     placeholder: "الملف فارغ، اكتب فيه ما تشاء.",
     toolbar: MDE_TOOLBAR,
     previewClass: ["editor-preview", "md-preview"],
+    renderingConfig: { sanitizerFunction: sanitizePreview },
   });
 }
 
@@ -535,7 +582,7 @@ function resolve(p) {
       const meta = a.files.find(f => f.name === name);
       const label = meta?.label || name.replace("memory/", "").replace(/\.md$/, "");
       return { crumb: label, title: label, intro: meta?.desc,
-        render: () => `<div class="editor"><textarea id="fbody"></textarea></div>
+        render: () => `${editorTabs()}<div class="editor"><textarea id="fbody"></textarea></div>
           <button class="btn" data-on="save">حفظ</button>
           <p class="hint">تحفظ نسخة احتياطية قبل كل عملية حفظ.</p>`,
         mounted: async () => {
@@ -543,11 +590,17 @@ function resolve(p) {
           const j = await r.json().catch(() => ({}));
           mountEditor($("#fbody"), j.ok ? j.content : "");
         },
-        handlers: { save: async (v, btn) => {
-          btn.disabled = true;
-          await act("file.write", { agentId: arg, file: name, content: MDE ? MDE.value() : $("#fbody").value });
-          btn.disabled = false;
-        } } };
+        handlers: {
+          tabEdit: () => setEditorTab("edit"),
+          tabPreview: () => setEditorTab("preview"),
+          save: async (v, btn) => {
+            btn.disabled = true;
+            /* Saving from the preview tab must still save what was typed.
+               MDE.value() reads the document, not the visible pane, so preview
+               stays a view and never a source of truth. */
+            await act("file.write", { agentId: arg, file: name, content: MDE ? MDE.value() : $("#fbody").value });
+            btn.disabled = false;
+          } } };
     }
 
     const groups = S.bindings.filter(b => b.agentId === arg);
