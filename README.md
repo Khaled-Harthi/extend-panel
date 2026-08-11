@@ -7,13 +7,21 @@ each agent's workspace files.
 
 Built for people who run an agent but do not want to edit config by hand.
 
-## Install
+## Install on a Hostinger VPS
+
+Paste this whole block into your VPS terminal. It finds your container and your
+address on its own — nothing to fill in:
 
 ```bash
-openclaw plugins install clawhub:@khaled-harthi/extend-panel
+CT=$(docker ps --format '{{.Names}} {{.Image}}' | awk '/hvps-openclaw/{print $1; exit}')
+HOST=$(docker inspect "$CT" --format '{{json .Config.Labels}}' | grep -oE 'Host\(`[^`]+`\)' | head -1 | tr -d '`' | sed 's/Host(//; s/)//')
+docker exec "$CT" openclaw plugins install git:github.com/Khaled-Harthi/extend-panel@v0.1.2 --force
+docker exec "$CT" openclaw config set plugins.entries.extend-panel.config.panelUrl "https://$HOST"
+docker restart "$CT"
+echo "PANEL: https://$HOST/hooks/extend-panel/"
 ```
 
-Installing plugin code needs a gateway restart. After that, message your agent:
+The gateway takes about 90 seconds to come back. Then message your agent:
 
 ```
 /extend
@@ -23,6 +31,13 @@ You get a private link that expires in 15 minutes and works once. Opening it
 signs that browser in for 30 days, so bookmark the page — you will not need to
 ask for a link again, and it keeps working if WhatsApp goes down or the gateway
 restarts.
+
+## Install anywhere else
+
+```bash
+openclaw plugins install git:github.com/Khaled-Harthi/extend-panel@v0.1.2 --force
+openclaw gateway restart
+```
 
 ## Configuration
 
@@ -39,6 +54,15 @@ openclaw config set plugins.entries.extend-panel.config.panelUrl "https://your-a
 | `panelUrl`       | derived | Public https address of the panel              |
 | `linkTtlMinutes` | `15`    | How long a chat link stays valid               |
 | `sessionDays`    | `30`    | How long a browser stays signed in             |
+| `mountPath`      | `/hooks/extend-panel` | Path the panel is served at        |
+
+### Why the panel lives under `/hooks`
+
+Hostinger's OpenClaw image puts a proxy in front of the gateway that demands a
+token login on every path **except** `/hooks/*`, which it forwards untouched so
+channel webhooks keep working. Mounting there is what lets a chat link open on a
+phone without a second login. The panel's own session cookie is still the gate —
+moving the mount does not remove authentication, it only avoids Hostinger's.
 
 ## Security
 
