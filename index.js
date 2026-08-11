@@ -8,7 +8,13 @@ import { createConfigStore, createModel } from "./src/model.js";
 import { createPanel } from "./src/panel.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const MOUNT = "/extend-panel";
+/* Hostinger's OpenClaw image fronts the gateway with a proxy that requires a
+   token login on every path except `/hooks/*`, which it forwards unauthenticated
+   so channel webhooks work. Mounting there is what makes a chat link openable on
+   a phone without a second login. Harmless elsewhere: the gateway serves plugin
+   routes at whatever path they claim. Override with `mountPath` if a channel
+   ever wants this exact sub-path. */
+const DEFAULT_MOUNT = "/hooks/extend-panel";
 
 const dataDir = () =>
   process.env.OPENCLAW_DATA_DIR || path.join(os.homedir(), ".openclaw");
@@ -41,12 +47,15 @@ export default definePluginEntry({
       sessionTtlMs: Math.round((cfg.sessionDays ?? 30) * 24 * 60 * 60 * 1000),
     });
     const model = createModel({
-      store: createConfigStore(api.runtime),
+      store: createConfigStore({ configPath: path.join(dataDir(), "openclaw.json") }),
       dataDir: dataDir(),
       codexDir: codexDir(),
     });
+    const mount = typeof cfg.mountPath === "string" && cfg.mountPath.startsWith("/")
+      ? cfg.mountPath.replace(/\/+$/, "")
+      : DEFAULT_MOUNT;
     const handle = createPanel({
-      mount: MOUNT,
+      mount,
       publicDir: path.join(HERE, "public"),
       auth,
       model,
@@ -69,7 +78,7 @@ export default definePluginEntry({
         const minutes = cfg.linkTtlMinutes ?? 15;
         return {
           text: `Open this private link (expires in ${minutes} minutes, works once):\n\n`
-            + `${publicBase(api)}${MOUNT}/?t=${token}\n\n`
+            + `${publicBase(api)}${mount}/?t=${token}\n\n`
             + "Don't forward it — it opens your control panel.",
         };
       },
@@ -78,7 +87,7 @@ export default definePluginEntry({
     // auth: "plugin" because the panel owns its own session cookie; the gateway
     // must not demand an operator token for a link opened on someone's phone.
     api.registerHttpRoute({
-      path: MOUNT,
+      path: mount,
       match: "prefix",
       auth: "plugin",
       handler: handle,

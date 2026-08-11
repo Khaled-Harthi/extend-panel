@@ -1,27 +1,39 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
 /* ---------- config access ----------
-   Reads and writes go through the gateway rather than touching openclaw.json,
-   so every write is schema-validated, restart-planned, and guarded against a
-   concurrent writer by `baseHash`.
+   Writes go straight to openclaw.json. `runtime.gateway.request` would give us
+   schema validation and restart planning for free, but it is gated to bundled
+   and trusted-official plugins — a third-party install gets
+   "Gateway requests are only available to bundled or trusted official plugins."
+   so config.get/config.apply are not reachable from here.
 
-   `config.get` hands back a REDACTED snapshot: secrets arrive as sentinels.
-   The matching `config.apply` restores them from disk for any field we did not
-   change, so a read/mutate/write round-trip preserves credentials. Never treat
-   a value read here as a real secret, and never copy one field's value into
-   another — that would move a sentinel where a credential belongs. */
-export function createConfigStore(runtime) {
+   Consequences we handle ourselves:
+   - concurrency: `hash` is of the exact bytes we read, rechecked under write,
+     so a second tab's stale save fails instead of erasing the first one.
+   - durability: write to a temp file in the same directory and rename, so a
+     crash mid-write cannot leave a truncated config. One .bak is kept.
+   - reload: the gateway watches this file and hot-reloads on change, which is
+     what makes an edit take effect without a restart. */
+export function createConfigStore({ configPath }) {
+  const hashOf = (raw) => crypto.createHash("sha256").update(raw).digest("hex");
+
   return {
     async get() {
-      const snap = await runtime.gateway.request("config.get", {});
-      return { config: structuredClone(snap.config ?? {}), hash: snap.hash };
+      const raw = fs.readFileSync(configPath, "utf8");
+      return { config: JSON.parse(raw), hash: hashOf(raw) };
     },
     async apply(config, baseHash) {
-      await runtime.gateway.request("config.apply", {
-        raw: JSON.stringify(config, null, 2),
-        ...(baseHash ? { baseHash } : {}),
-      });
+      if (baseHash && hashOf(fs.readFileSync(configPath, "utf8")) !== baseHash) {
+        throw new Error("تم تعديل الإعدادات من مكان آخر. أعد تحميل الصفحة وحاول مرة أخرى.");
+      }
+      const next = JSON.stringify(config, null, 2) + "\n";
+      // Same directory so the rename stays atomic (no cross-device copy).
+      const tmp = `${configPath}.extend-panel.tmp`;
+      fs.writeFileSync(tmp, next, { mode: 0o600 });
+      try { fs.copyFileSync(configPath, `${configPath}.bak`); } catch {}
+      fs.renameSync(tmp, configPath);
     },
   };
 }

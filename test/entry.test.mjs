@@ -43,7 +43,10 @@ t("registers exactly one command", commands.length === 1, commands.map((c) => c.
 t("command is /extend", commands[0]?.name === "extend");
 t("command matches manifest alias", commands[0]?.name === manifest.commandAliases[0].name);
 t("registers exactly one route", routes.length === 1);
-t("route mounts at /extend-panel", routes[0]?.path === "/extend-panel", routes[0]?.path);
+/* Hostinger's proxy only forwards /hooks/* without its own token login, so this
+   default is what makes a chat link openable on a phone. Changing it silently
+   breaks every Hostinger install. */
+t("route mounts under /hooks", routes[0]?.path === "/hooks/extend-panel", routes[0]?.path);
 t("route is prefix-matched", routes[0]?.match === "prefix");
 t("route owns its own auth", routes[0]?.auth === "plugin");
 t("route handler is callable", typeof routes[0]?.handler === "function");
@@ -54,6 +57,7 @@ t("non-owner is refused a link", /Only the owner/.test(deny.text), deny.text);
 const ok = await commands[0].handler({ senderIsOwner: true, senderId: "+1555" });
 t("owner gets a mounted link", ok.text.includes("/extend-panel/?t="), ok.text.split("\n").find((l) => l.includes("http")));
 t("link warns against forwarding", /forward/i.test(ok.text));
+t("link points at the same mount", ok.text.includes("/hooks/extend-panel/?t="));
 
 // no gateway token -> no link rather than a broken one
 const noTok = { ...entry };

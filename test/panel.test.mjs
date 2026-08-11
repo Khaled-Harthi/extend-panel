@@ -10,7 +10,7 @@ const { createAuth } = await import(`${PKG}/src/auth.js`);
 const { createConfigStore, createModel, rosterOf, setRoster } = await import(`${PKG}/src/model.js`);
 const { createPanel } = await import(`${PKG}/src/panel.js`);
 
-const MOUNT = "/extend-panel";
+const MOUNT = "/hooks/extend-panel";
 const PORT = 18393;
 const TOKEN = "testtoken123";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "extpanel-"));
@@ -20,26 +20,13 @@ const read = () => JSON.parse(fs.readFileSync(CFG, "utf8"));
 const write = (c) => fs.writeFileSync(CFG, JSON.stringify(c, null, 2));
 const hashOf = (c) => crypto.createHash("sha256").update(JSON.stringify(c)).digest("hex");
 
-/* Stub gateway: mirrors the two RPCs the panel uses, including the baseHash
-   guard, so a stale write fails here exactly as it would in production. */
-let applyCalls = [];
-const runtime = {
-  gateway: {
-    request: async (method, params) => {
-      if (method === "config.get") return { config: read(), hash: hashOf(read()) };
-      if (method === "config.apply") {
-        applyCalls.push(params);
-        if (typeof params.raw !== "string" || !params.raw.trim()) throw new Error("raw required");
-        const next = JSON.parse(params.raw); // must be valid JSON or this throws
-        if (params.baseHash && params.baseHash !== hashOf(read())) {
-          throw new Error("config changed since it was read");
-        }
-        write(next);
-        return { ok: true };
-      }
-      throw new Error("unexpected method " + method);
-    },
-  },
+let applyCount = 0;
+const store = createConfigStore({ configPath: CFG });
+/* Count writes without changing behaviour, so tests can assert that a mutation
+   actually persisted rather than silently no-oped. */
+const countingStore = {
+  get: () => store.get(),
+  apply: async (c, h) => { applyCount += 1; return store.apply(c, h); },
 };
 
 const baseCfg = (roster, servers = {}, shape = "entries") => {
@@ -52,7 +39,7 @@ const baseCfg = (roster, servers = {}, shape = "entries") => {
 write(baseCfg(["main", "saqr"]));
 
 const auth = createAuth({ gatewayToken: () => read().gateway?.auth?.token || "", linkTtlMs: 9e5, sessionTtlMs: 30 * 864e5 });
-const model = createModel({ store: createConfigStore(runtime), dataDir: dir, codexDir: path.join(dir, "codex") });
+const model = createModel({ store: countingStore, dataDir: dir, codexDir: path.join(dir, "codex") });
 const handle = createPanel({
   mount: MOUNT, publicDir: path.join(PKG, "public"), auth, model,
   actions: { run: async (a) => ({ ok: true, msg: "stub " + a }) },
@@ -126,15 +113,14 @@ t("state lists agents from entries shape", r.status === 200 && eq(st.agents.map(
 t("default agent flagged", st.agents[0].isMain === true && st.agents[1].isMain === false);
 
 /* ---------- mutations write through config.apply ---------- */
-applyCalls = [];
+applyCount = 0;
 r = await post(`${MOUNT}/api/do`, { action: "agent.rename", data: { id: "saqr", name: "صقر" } }, cookie);
 t("rename ok", (await r.json()).ok === true);
-t("apply got a baseHash", applyCalls.length === 1 && typeof applyCalls[0].baseHash === "string");
+t("mutation performed exactly one write", applyCount === 1, String(applyCount));
 t("rename persisted into entries", read().agents.entries.saqr.name === "صقر", JSON.stringify(read().agents.entries));
 t("entries shape preserved", !read().agents.list && !!read().agents.entries);
 
 /* stale write must lose */
-const store = createConfigStore(runtime);
 const snap = await store.get();
 write({ ...read(), marker: "changed-by-someone-else" });
 let stale = null;
