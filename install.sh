@@ -52,10 +52,23 @@ if [ -z "$HOST" ] && [ -n "$CT" ]; then
 fi
 
 # Hostinger's "App terminal" is a shell *inside* the container: no docker socket,
-# and nothing there knows the public hostname — Traefik routes
-# `<stack>.$TRAEFIK_HOST` and the stack name lives only in the compose project on
-# the host. Everything else works from in here, so ask for the one missing fact
-# rather than refusing. `< /dev/tty` because stdin is the piped script.
+# so the Traefik label above is unreachable. But the data volume is bind-mounted
+# from /docker/<stack>/data on the host, and Traefik publishes each stack at
+# `<stack>.$TRAEFIK_HOST` — so mountinfo plus that env var reconstruct the
+# address. Confirm the guess actually serves this OpenClaw before trusting it.
+if [ -z "$HOST" ] && [ -n "${TRAEFIK_HOST:-}" ]; then
+  STACK=$(grep -oE '/docker/[^/ ]+/' /proc/self/mountinfo 2>/dev/null | head -1 | cut -d/ -f3)
+  if [ -n "${STACK:-}" ]; then
+    CAND="https://${STACK}.${TRAEFIK_HOST}"
+    if curl -fsS --max-time 15 "$CAND/" 2>/dev/null | grep -qi openclaw; then
+      HOST="$CAND"
+    fi
+  fi
+fi
+
+# Last resort only: every automatic route above failed, so ask rather than
+# install something whose chat links would point at localhost.
+# `< /dev/tty` because stdin is the piped script.
 if [ -z "$HOST" ] && [ -t 1 ] && [ -e /dev/tty ]; then
   printf '\n\033[36m==>\033[0m What address do you open this app on?\n'
   [ -n "${TRAEFIK_HOST:-}" ] \
