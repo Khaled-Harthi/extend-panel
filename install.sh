@@ -116,18 +116,30 @@ if [ -n "$CT" ]; then
   done
   [ "$i" -lt 24 ] || warn "Gateway is taking longer than usual; give it another minute."
 else
-  openclaw gateway restart >/dev/null 2>&1 || warn "Restart the gateway yourself to finish."
+  # Inside Hostinger's container the gateway is supervised by their server.mjs,
+  # not by launchd/systemd, so `gateway restart` prints "Gateway service
+  # disabled" and exits 0 without doing anything. Killing the process does not
+  # help either — nothing respawns it. So try, then let the verify step below
+  # decide whether the plugin actually came up.
+  openclaw gateway restart >/dev/null 2>&1 || true
 fi
 
 # ---- prove it ------------------------------------------------------------
 # The panel serves its stylesheet without a session, so a 200 here means the
 # address really reaches this gateway. A wrong address is the one mistake that
 # otherwise stays invisible until a student taps a dead link on their phone.
+CODE=skipped
 if [ -n "$HOST" ]; then
-  CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
-         "$HOST/hooks/extend-panel/app.css" 2>/dev/null || echo 000)
-else
-  CODE=skipped
+  # Give the gateway time to come back before judging it; a fresh start takes
+  # well under a minute, and a no-op restart never will.
+  n=0
+  while [ "$n" -lt 12 ]; do
+    CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+           "$HOST/hooks/extend-panel/app.css" 2>/dev/null || echo 000)
+    [ "$CODE" = "200" ] && break
+    n=$((n + 1))
+    sleep 5
+  done
 fi
 
 if [ "$CODE" = "200" ]; then
@@ -135,13 +147,20 @@ if [ "$CODE" = "200" ]; then
   printf '  %s/hooks/extend-panel/\n\n' "$HOST"
   printf '  أرسل \033[1m/extend\033[0m في المحادثة للحصول على رابطك الخاص.\n'
   printf '  Send \033[1m/extend\033[0m to your agent to get your private link.\n\n'
-elif [ -n "$HOST" ]; then
-  printf '\n\033[33m !\033[0m Installed, but %s did not answer (%s).\n' "$HOST" "$CODE"
-  printf '   The plugin is fine; the address is probably wrong. Re-run with the right one:\n\n'
-  printf '     curl -fsSL %s | PANEL_URL=https://your-address sh\n\n' "$RAW"
-else
+elif [ -z "$HOST" ]; then
   # Installed, but /extend would hand out a localhost link, so do not call it done.
   printf '\n\033[33m !\033[0m Extend Panel is installed, but it has no public address yet,\n'
   printf '   so chat links would point at localhost. Set one with:\n\n'
+  printf '     curl -fsSL %s | PANEL_URL=https://your-address sh\n\n' "$RAW"
+elif [ -z "$CT" ]; then
+  # In-container: installed and configured, but only a real app restart loads
+  # the plugin, and nothing reachable from in here can trigger one.
+  printf '\n\033[33m !\033[0m Almost done — the app needs one restart to load the panel.\n\n'
+  printf '   Open your app in the Hostinger dashboard and press \033[1mRestart\033[0m.\n'
+  printf '   Then send \033[1m/extend\033[0m in the chat.\n\n'
+  printf '   Your panel will be at:\n     %s/hooks/extend-panel/\n\n' "$HOST"
+else
+  printf '\n\033[33m !\033[0m Installed, but %s did not answer (%s).\n' "$HOST" "$CODE"
+  printf '   The plugin is fine; the address may be wrong. Re-run with the right one:\n\n'
   printf '     curl -fsSL %s | PANEL_URL=https://your-address sh\n\n' "$RAW"
 fi
