@@ -31,20 +31,6 @@ if command -v docker >/dev/null 2>&1; then
        | awk -v m="$IMAGE_MATCH" 'index($2, m) {print $1; exit}')
 fi
 
-# Inside the OpenClaw container there is no docker socket and no way to learn the
-# public hostname: Traefik routes `<stack>.$TRAEFIK_HOST`, and the stack name
-# lives only in the compose project on the host. Installing here still works, but
-# the chat link would point at localhost, so stop and send them to the host.
-if [ -z "$CT" ] && [ -n "${TRAEFIK_HOST:-}" ] && [ -z "${PANEL_URL:-}" ]; then
-  die "This looks like the OpenClaw container, which cannot see its own public address.
-
-  Run the same line on the VPS itself (ssh into the server, not this shell):
-    curl -fsSL $RAW | sh
-
-  Or stay here and pass the address by hand:
-    curl -fsSL $RAW | PANEL_URL=https://your-address sh"
-fi
-
 if [ -n "$CT" ]; then
   say "OpenClaw container: $CT"
   RUN="docker exec $CT"
@@ -63,6 +49,27 @@ if [ -z "$HOST" ] && [ -n "$CT" ]; then
   HOST=$(docker inspect "$CT" --format '{{json .Config.Labels}}' 2>/dev/null \
          | grep -oE 'Host\(`[^`]+`\)' | head -1 | tr -d '`' | sed 's/Host(//; s/)//' || true)
   [ -n "$HOST" ] && HOST="https://$HOST"
+fi
+
+# Hostinger's "App terminal" is a shell *inside* the container: no docker socket,
+# and nothing there knows the public hostname — Traefik routes
+# `<stack>.$TRAEFIK_HOST` and the stack name lives only in the compose project on
+# the host. Everything else works from in here, so ask for the one missing fact
+# rather than refusing. `< /dev/tty` because stdin is the piped script.
+if [ -z "$HOST" ] && [ -t 1 ] && [ -e /dev/tty ]; then
+  printf '\n\033[36m==>\033[0m What address do you open this app on?\n'
+  [ -n "${TRAEFIK_HOST:-}" ] \
+    && printf '    It ends in \033[1m%s\033[0m — copy it from the Hostinger page.\n' "$TRAEFIK_HOST"
+  printf '    Paste it here and press Enter: '
+  read -r HOST < /dev/tty || HOST=""
+  HOST=$(printf '%s' "$HOST" | tr -d ' \t\r')
+  # Accept a bare hostname or a pasted full URL, with or without a trailing slash.
+  case "$HOST" in
+    "") ;;
+    http://*|https://*) ;;
+    *) HOST="https://$HOST" ;;
+  esac
+  HOST=$(printf '%s' "$HOST" | sed 's#/*$##')
 fi
 
 # ---- install ------------------------------------------------------------
@@ -99,14 +106,29 @@ else
   openclaw gateway restart >/dev/null 2>&1 || warn "Restart the gateway yourself to finish."
 fi
 
+# ---- prove it ------------------------------------------------------------
+# The panel serves its stylesheet without a session, so a 200 here means the
+# address really reaches this gateway. A wrong address is the one mistake that
+# otherwise stays invisible until a student taps a dead link on their phone.
 if [ -n "$HOST" ]; then
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+         "$HOST/hooks/extend-panel/app.css" 2>/dev/null || echo 000)
+else
+  CODE=skipped
+fi
+
+if [ "$CODE" = "200" ]; then
   printf '\n\033[32m✓ Extend Panel is installed.\033[0m\n\n'
   printf '  %s/hooks/extend-panel/\n\n' "$HOST"
   printf '  أرسل \033[1m/extend\033[0m في المحادثة للحصول على رابطك الخاص.\n'
   printf '  Send \033[1m/extend\033[0m to your agent to get your private link.\n\n'
+elif [ -n "$HOST" ]; then
+  printf '\n\033[33m !\033[0m Installed, but %s did not answer (%s).\n' "$HOST" "$CODE"
+  printf '   The plugin is fine; the address is probably wrong. Re-run with the right one:\n\n'
+  printf '     curl -fsSL %s | PANEL_URL=https://your-address sh\n\n' "$RAW"
 else
   # Installed, but /extend would hand out a localhost link, so do not call it done.
-  printf '\n\033[33m!\033[0m Extend Panel is installed, but it has no public address yet,\n'
-  printf '  so chat links would point at localhost. Set one with:\n\n'
-  printf '    curl -fsSL %s | PANEL_URL=https://your-address sh\n\n' "$RAW"
+  printf '\n\033[33m !\033[0m Extend Panel is installed, but it has no public address yet,\n'
+  printf '   so chat links would point at localhost. Set one with:\n\n'
+  printf '     curl -fsSL %s | PANEL_URL=https://your-address sh\n\n' "$RAW"
 fi
