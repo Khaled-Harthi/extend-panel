@@ -1,6 +1,6 @@
 {
   "name": "@khaled-harthi/extend-panel",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Arabic-first mobile control panel for OpenClaw, opened from a private chat link.",
   "type": "module",
   "license": "MIT",

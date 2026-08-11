@@ -9,17 +9,24 @@ Built for people who run an agent but do not want to edit config by hand.
 
 ## Install on a Hostinger VPS
 
-Paste this whole block into your VPS terminal. It finds your container and your
-address on its own — nothing to fill in:
+One line, in either of Hostinger's terminals:
 
 ```bash
-CT=$(docker ps --format '{{.Names}} {{.Image}}' | awk '/hvps-openclaw/{print $1; exit}')
-HOST=$(docker inspect "$CT" --format '{{json .Config.Labels}}' | grep -oE 'Host\(`[^`]+`\)' | head -1 | tr -d '`' | sed 's/Host(//; s/)//')
-docker exec "$CT" openclaw plugins install git:github.com/Khaled-Harthi/extend-panel@v0.1.2 --force
-docker exec "$CT" openclaw config set plugins.entries.extend-panel.config.panelUrl "https://$HOST"
-docker restart "$CT"
-echo "PANEL: https://$HOST/hooks/extend-panel/"
+curl -fsSL https://raw.githubusercontent.com/Khaled-Harthi/extend-panel/main/install.sh | sh
 ```
+
+Which terminal you use changes one thing:
+
+| Terminal | Where it runs | What it asks you |
+| --- | --- | --- |
+| **VPS → Browser terminal** | the host (has `docker`) | nothing — it finds the container and the address itself |
+| **App → App terminal** | inside the container | pastes your app address once |
+
+The app terminal's prompt reads `root@srv1846913`, which looks like the VPS, but
+it is a shell *inside* the container: no docker socket, and nothing in there
+knows the public hostname. Traefik routes `<stack>.$TRAEFIK_HOST` and the stack
+name lives only in the compose project on the host, so the installer asks for
+the address and then proves it by fetching the panel through it.
 
 The gateway takes about 90 seconds to come back. Then message your agent:
 
@@ -35,7 +42,7 @@ restarts.
 ## Install anywhere else
 
 ```bash
-openclaw plugins install git:github.com/Khaled-Harthi/extend-panel@v0.1.2 --force
+openclaw plugins install git:github.com/Khaled-Harthi/extend-panel@v0.1.3 --force
 openclaw gateway restart
 ```
 

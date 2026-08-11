@@ -8,11 +8,11 @@
 # discovered, so there is nothing to fill in.
 #
 # Override if you need to:
-#   VERSION=v0.1.2  pin a different release
+#   VERSION=v0.1.3  pin a different release
 #   PANEL_URL=...   set the public address by hand
 set -eu
 
-VERSION="${VERSION:-v0.1.2}"
+VERSION="${VERSION:-v0.1.3}"
 REPO="github.com/Khaled-Harthi/extend-panel"
 RAW="https://raw.githubusercontent.com/Khaled-Harthi/extend-panel/main/install.sh"
 SPEC="git:${REPO}@${VERSION}"
