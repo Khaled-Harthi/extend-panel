@@ -742,10 +742,12 @@ function resolve(p) {
           $("#oa").innerHTML = `<ol class="steps" style="margin-top:22px">
               <li>افتح الرابط التالي ووافق على الصلاحيات.</li>
               <li>سيحاول المتصفح فتح صفحة لا تعمل، وهذا طبيعي.</li>
-              <li>انسخ الرابط كاملا من شريط العنوان وألصقه بالأسفل.</li></ol>
+              <li>انسخ الرابط كاملا من شريط العنوان وألصقه بالأسفل،
+                ولو لم يبدأ بـ http فلا مشكلة.</li></ol>
             <div class="note ltr" style="margin-top:14px;word-break:break-all">${esc(j.url)}</div>
             <label class="fl">الرابط الذي وصلت إليه</label>
-            <input type="url" id="oacode" class="ltr" placeholder="http://127.0.0.1:8989/oauth/callback?code=...">
+            <input type="text" inputmode="url" autocapitalize="off" spellcheck="false"
+              id="oacode" class="ltr" placeholder="127.0.0.1:8989/oauth/callback?code=...">
             <button class="btn" data-on="finish">إكمال الربط</button>`;
           bind($("#oa"), resolve(location.hash.replace(/^#\/?/, "")));
         },

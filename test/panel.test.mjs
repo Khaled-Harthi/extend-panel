@@ -9,6 +9,7 @@ const PKG = new URL("..", import.meta.url).pathname;
 const { createAuth } = await import(`${PKG}/src/auth.js`);
 const { createConfigStore, createModel, rosterOf, setRoster } = await import(`${PKG}/src/model.js`);
 const { createPanel } = await import(`${PKG}/src/panel.js`);
+const { extractOAuthCode } = await import(`${PKG}/src/actions.js`);
 
 const MOUNT = "/hooks/extend-panel";
 const PORT = 18393;
@@ -201,6 +202,28 @@ for (const bad of ["../openclaw.json", "memory/../../openclaw.json", "/etc/passw
   const j = await r.json();
   t(`file guard rejects ${bad}`, j.ok !== true, j.msg);
 }
+
+/* ---------- oauth code extraction ---------- */
+/* The redirect the user copies comes off a phone address bar, which hides the
+   scheme, so schemeless pastes are the common case rather than the edge one. */
+const CODE = "ac_9fK3-tZ.q~1";
+for (const [label, pasted] of [
+  ["full url", `http://127.0.0.1:8989/oauth/callback?code=${CODE}&state=x`],
+  ["schemeless url", `127.0.0.1:8989/oauth/callback?code=${CODE}&state=x`],
+  ["https redirect", `https://example.com/cb?state=x&code=${CODE}`],
+  ["code first", `127.0.0.1:8989/cb?code=${CODE}`],
+  ["bare code", CODE],
+  ["percent-escaped", `127.0.0.1:8989/cb?code=${encodeURIComponent(CODE)}&state=x`],
+  ["fragment", `127.0.0.1:8989/cb#code=${CODE}`],
+  ["surrounding spaces", `  127.0.0.1:8989/cb?code=${CODE}  `],
+]) t(`oauth code from ${label}`, extractOAuthCode(pasted) === CODE, String(extractOAuthCode(pasted)));
+
+for (const [label, pasted] of [
+  ["empty", ""],
+  ["url with no code", "127.0.0.1:8989/oauth/callback?state=x"],
+  ["too short", "ab"],
+  ["url pasted without a query", "http://127.0.0.1:8989/oauth/callback"],
+]) t(`oauth code rejected: ${label}`, extractOAuthCode(pasted) === null, String(extractOAuthCode(pasted)));
 
 /* ---------- unknown action ---------- */
 r = await post(`${MOUNT}/api/do`, { action: "nope", data: {} }, cookie);

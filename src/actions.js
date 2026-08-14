@@ -28,6 +28,19 @@ function parseJson(text) {
 
 const MCP_NAME_RE = /^[a-z0-9][a-z0-9._-]{0,60}$/i;
 
+/* Pull the authorization code out of whatever the user pasted. Phone browsers
+   hide the scheme, so the redirect that failed to load is usually copied as
+   "127.0.0.1:8989/oauth/callback?code=..." — parsing it as a URL would reject
+   the one shape most people actually paste. A bare code is accepted too. */
+export function extractOAuthCode(codeOrUrl) {
+  const raw = String(codeOrUrl || "").trim();
+  const matched = raw.match(/[?&#]code=([^&\s#]*)/)?.[1];
+  let code = matched ?? raw;
+  // A code copied from an address bar can still carry percent escapes.
+  try { code = decodeURIComponent(code); } catch {}
+  return /^[\w.~-]{4,512}$/.test(code) ? code : null;
+}
+
 export function createActions() {
   let oauthChild = null;
   let oauthUrl = null;
@@ -169,15 +182,8 @@ export function createActions() {
 
   async function mcpLoginComplete(name, codeOrUrl) {
     if (!MCP_NAME_RE.test(String(name || ""))) return { ok: false, msg: "اسم غير صالح" };
-    // Users paste the whole failed redirect; pull the code out for them.
-    const raw = String(codeOrUrl || "").trim();
-    let code = raw;
-    if (/^https?:\/\//i.test(raw)) {
-      try { code = new URL(raw).searchParams.get("code") || ""; } catch { code = ""; }
-    }
-    if (!code || !/^[\w.~-]{4,512}$/.test(code)) {
-      return { ok: false, msg: "لم نجد رمز التفويض في ما ألصقته" };
-    }
+    const code = extractOAuthCode(codeOrUrl);
+    if (!code) return { ok: false, msg: "لم نجد رمز التفويض في ما ألصقته" };
     const r = await runCli(["mcp", "login", String(name), "--code", code], 90000);
     if (r.ok) return { ok: true, msg: "تم ربط الخادم بنجاح" };
     // The CLI failure text is English and stack-flavored; translate common cases.
